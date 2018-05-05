@@ -109,23 +109,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     @Override
                     public void subscribe(@NonNull SingleEmitter<Bundle> e) throws Exception {
                         try {
-                            String curLogin = "";
-                            String curUserID = "";
-                            String curAvatarUrl = "";
-
                             realm = Realm.getDefaultInstance();
                             Date first = new Date();
                             for (RetrofitModel curItem: modelList) {
-                                curLogin = curItem.getLogin();
-                                curUserID = curItem.getId();
-                                curAvatarUrl = curItem.getAvatarUrl();
                                 try {
-                                    realm.beginTransaction();
-                                    RealmModel realmModel = realm.createObject(RealmModel.class);
-                                    realmModel.setUserId(curUserID);
-                                    realmModel.setLogin(curLogin);
-                                    realmModel.setAvatarUrl(curAvatarUrl);
-                                    realm.commitTransaction();
+                                    realm.executeTransactionAsync(new Realm.Transaction() {
+                                        @Override
+                                        public void execute(Realm realm) {
+                                            String curLogin = curItem.getLogin();
+                                            String curUserID = curItem.getId();
+                                            String curAvatarUrl = curItem.getAvatarUrl();
+
+                                            RealmModel realmModel = realm.createObject(RealmModel.class);
+                                            realmModel.setUserId(curUserID);
+                                            realmModel.setLogin(curLogin);
+                                            realmModel.setAvatarUrl(curAvatarUrl);
+                                        }
+                                    });
                                 } catch (Exception ex) {
                                     realm.cancelTransaction();
                                     e.onError(ex);
