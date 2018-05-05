@@ -1,9 +1,9 @@
 package office.small.networkstories;
 
 import android.content.Context;
-import android.graphics.ColorSpace;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -14,28 +14,43 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import io.reactivex.schedulers.Schedulers;
+import io.reactivex.Single;
+import io.reactivex.SingleEmitter;
+import io.reactivex.SingleOnSubscribe;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.observers.DisposableSingleObserver;
+import io.realm.Realm;
+import io.realm.RealmResults;
 import office.small.networkstories.api.RestAPI;
 import office.small.networkstories.api.RestAPIUser;
+import office.small.networkstories.model.RealmModel;
 import office.small.networkstories.model.RetrofitModel;
-
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener{
     public static final String DONEURL = "DWNONEURL";
-    private static final String GITAPIURL = "https://api.github.com/users/";
+    private static final String GITAPIURL = "https://api.github.com/";
     private TextView mInfoTextView;
     private ProgressBar progressBar;
     private EditText editText;
+
+    Button btnSaveAllRealm;
+    Button btnSelectAllRealm;
+    Button btnDeleteAllRealm;
+
     RestAPI restAPI;
     RestAPIUser restAPIUser;
-    //List<Model> modelList new ArrayList<>();
-    //DisposableSingleObserver<Bundle> dso;
+    List<RetrofitModel> modelList = new ArrayList<>();
+    DisposableSingleObserver<Bundle> dso;
+    private Realm realm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,49 +60,184 @@ public class MainActivity extends AppCompatActivity {
         editText = findViewById(R.id.editText);
         mInfoTextView = findViewById(R.id.tvLoad);
         progressBar = findViewById(R.id.progressBar);
+
         Button btnLoad = findViewById(R.id.btnLoad);
-        btnLoad.setOnClickListener((v) -> onClick());
+        btnLoad.setOnClickListener(this);
+
+        btnSaveAllRealm = findViewById(R.id.btnSaveAllRealm);
+        btnSelectAllRealm = findViewById(R.id.btnSelectAllRealm);
+        btnDeleteAllRealm = findViewById(R.id.btnDeleteAllRealm);
+        btnSaveAllRealm.setOnClickListener(this);
+        btnSelectAllRealm.setOnClickListener(this);
+        btnDeleteAllRealm.setOnClickListener(this);
+
     }
 
-    private void onClick() {
-        mInfoTextView.setText("");
-        Retrofit retrofit = null;
-        Call<List<RetrofitModel>> call;
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+    }
 
-        try {
-            retrofit = new Retrofit.Builder()
-                    .baseUrl(GITAPIURL)
-                    .addConverterFactory(GsonConverterFactory.create())
-                    .build();
-            if (!editText.getText().toString().isEmpty()) {
-                restAPIUser = retrofit.create(RestAPIUser.class);
-            } else {
-                restAPI = retrofit.create(RestAPI.class);
-            }
-        } catch (Exception e) {
-            mInfoTextView.setText("no retrofit: " + e.getMessage());
-            return;
-        }
-
-        if (!editText.getText().toString().isEmpty()) {
-            call = restAPIUser.loadUsers(editText.getText().toString());
-        } else {
-            call = restAPI.loadUsers();
-        }
-
-        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-
-        if (networkInfo != null && networkInfo.isConnected()) {
-            try {
+    private DisposableSingleObserver<Bundle> CreateObserver() {
+        return new DisposableSingleObserver<Bundle>() {
+            @Override
+            protected void onStart() {
+                super.onStart();
                 progressBar.setVisibility(View.VISIBLE);
-                downloadOneUrl(call);
-            } catch (IOException e) {
-                e.printStackTrace();
-                mInfoTextView.setText(e.getMessage());
+                mInfoTextView.setText("");
             }
-        } else {
-            Toast.makeText(this, "Network is off. Turn it on.", Toast.LENGTH_SHORT).show();
+
+            @Override
+            public void onSuccess(Bundle bundle) {
+                progressBar.setVisibility(View.GONE);
+                mInfoTextView.append("Total = " + bundle.getInt("count") +
+                    "\nmsek = " + bundle.getLong("msek"));
+            }
+
+            @Override
+            public void onError(Throwable e) {
+                progressBar.setVisibility(View.GONE);
+                mInfoTextView.setText("DB error: " + e.getMessage());
+            }
+        };
+    }
+    @Override
+    public void onClick(View v) {
+        switch (v.getId()) {
+            case R.id.btnSaveAllRealm:
+                Single<Bundle> singleSaveAllRealm = Single.create(new SingleOnSubscribe<Bundle>() {
+                    @Override
+                    public void subscribe(@NonNull SingleEmitter<Bundle> e) throws Exception {
+                        try {
+                            String curLogin = "";
+                            String curUserID = "";
+                            String curAvatarUrl = "";
+
+                            realm = Realm.getDefaultInstance();
+                            Date first = new Date();
+                            for (RetrofitModel curItem: modelList) {
+                                curLogin = curItem.getLogin();
+                                curUserID = curItem.getId();
+                                curAvatarUrl = curItem.getAvatarUrl();
+                                try {
+                                    realm.beginTransaction();
+                                    RealmModel realmModel = realm.createObject(RealmModel.class);
+                                    realmModel.setUserId(curUserID);
+                                    realmModel.setLogin(curLogin);
+                                    realmModel.setAvatarUrl(curAvatarUrl);
+                                    realm.commitTransaction();
+                                } catch (Exception ex) {
+                                    realm.cancelTransaction();
+                                    e.onError(ex);
+                                }
+                            }
+                            Date second = new Date();
+                            RealmResults<RealmModel> tempList = realm.where(RealmModel.class).findAll();
+                            Bundle bundle = new Bundle();
+                            bundle.putInt("count", tempList.size());
+                            bundle.putLong("msek", second.getTime() - first.getTime());
+                            e.onSuccess(bundle);
+                            realm.close();
+                        } catch (Exception ex) {
+                            e.onError(ex);
+                        }
+                    }
+                }).subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread());
+                singleSaveAllRealm.subscribeWith(CreateObserver());
+                break;
+            case R.id.btnSelectAllRealm:
+                Single<Bundle> singleSelectAllRealm = Single.create(new SingleOnSubscribe<Bundle>() {
+                    @Override
+                    public void subscribe(@NonNull SingleEmitter<Bundle> e) throws Exception {
+                        try {
+                            realm = Realm.getDefaultInstance();
+                            Date first = new Date();
+                            RealmResults<RealmModel> tempList = realm.where(RealmModel.class).findAll();
+                            Date second = new Date();
+                            Bundle bundle = new Bundle();
+                            bundle.putInt("count", tempList.size());
+                            bundle.putLong("msek", second.getTime() - first.getTime());
+                            e.onSuccess(bundle);
+                            realm.close();
+                        } catch (Exception ex) {
+                            e.onError(ex);
+                        }
+                    }
+                }).subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread());
+                singleSelectAllRealm.subscribeWith(CreateObserver());
+                break;
+            case R.id.btnDeleteAllRealm:
+                Single<Bundle> singleDeleteAllRealm = Single.create(new SingleOnSubscribe<Bundle>() {
+                    @Override
+                    public void subscribe(@NonNull SingleEmitter<Bundle> e) throws Exception {
+                        try {
+                            realm = Realm.getDefaultInstance();
+                            final RealmResults<RealmModel> tempList = realm.where(RealmModel.class).findAll();
+                            Date first = new Date();
+                            realm.executeTransaction(new Realm.Transaction() {
+                                @Override
+                                public void execute(Realm realm) {
+                                    tempList.deleteAllFromRealm();
+                                }
+                            });
+                            Date second = new Date();
+                            Bundle bundle = new Bundle();
+                            bundle.putInt("count", tempList.size());
+                            bundle.putLong("msek", second.getTime() - first.getTime());
+                            e.onSuccess(bundle);
+                            realm.close();
+                        } catch (Exception ex) {
+                            e.onError(ex);
+                        }
+                    }
+                }).subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread());
+                singleDeleteAllRealm.subscribeWith(CreateObserver());
+                break;
+            case R.id.btnLoad:
+                mInfoTextView.setText("");
+                Retrofit retrofit = null;
+                Call<List<RetrofitModel>> call;
+
+                try {
+                    retrofit = new Retrofit.Builder()
+                            .baseUrl(GITAPIURL)
+                            .addConverterFactory(GsonConverterFactory.create())
+                            .build();
+                    if (!editText.getText().toString().isEmpty()) {
+                        restAPIUser = retrofit.create(RestAPIUser.class);
+                    } else {
+                        restAPI = retrofit.create(RestAPI.class);
+                    }
+                } catch (Exception e) {
+                    mInfoTextView.setText("no retrofit: " + e.getMessage());
+                    return;
+                }
+
+                if (!editText.getText().toString().isEmpty()) {
+                    call = restAPIUser.loadUsers(editText.getText().toString());
+                } else {
+                    call = restAPI.loadUsers();
+                }
+
+                ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+
+                if (networkInfo != null && networkInfo.isConnected()) {
+                    try {
+                        progressBar.setVisibility(View.VISIBLE);
+                        downloadOneUrl(call);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        mInfoTextView.setText(e.getMessage());
+                    }
+                } else {
+                    Toast.makeText(this, "Network is off. Turn it on.", Toast.LENGTH_SHORT).show();
+                }
+                break;
+
         }
     }
 
@@ -98,12 +248,16 @@ public class MainActivity extends AppCompatActivity {
                 if (response.isSuccessful()) {
                     if (response != null) {
                         RetrofitModel curRetrofitModel = null;
+                        mInfoTextView.append("\nSize = " + response.body().size() +
+                            "\n----------------");
                         for (int i=0; i < response.body().size(); i++) {
                             curRetrofitModel = response.body().get(i);
-                            mInfoTextView.append("\nLogin = " + curRetrofitModel.getLogin() +
-                                "\nId = " + curRetrofitModel.getId() +
-                                "\nURI = " + curRetrofitModel.getAvatarUrl() +
-                                "\n------------");
+                            modelList.add(curRetrofitModel);
+                            mInfoTextView.append(
+                                    "\nLogin = " + curRetrofitModel.getLogin() +
+                                    "\nId = " + curRetrofitModel.getId() +
+                                    "\nURI = " + curRetrofitModel.getAvatarUrl() +
+                                    "\n------------");
                         }
                     }
                 } else {
@@ -121,4 +275,5 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
 }

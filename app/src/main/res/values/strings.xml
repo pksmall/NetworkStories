@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">NetworkStories</string>
     <string name="load_page">Load Page</string>
+    <string name="realm">Realm</string>
+    <string name="save_into_db">Save into DB</string>
+    <string name="show_all">Show All</string>
+    <string name="delete_all">Delete All</string>
 </resources>
