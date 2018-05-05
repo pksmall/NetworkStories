@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import javax.inject.Inject;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.Single;
 import io.reactivex.SingleEmitter;
@@ -27,17 +28,16 @@ import io.realm.Realm;
 import io.realm.RealmResults;
 import office.small.networkstories.api.RestAPI;
 import office.small.networkstories.api.RestAPIUser;
+import office.small.networkstories.di.AppComponent;
 import office.small.networkstories.model.RealmModel;
 import office.small.networkstories.model.RetrofitModel;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
+
+import static office.small.networkstories.model.IConstants.DONEURL;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
-    public static final String DONEURL = "DWNONEURL";
-    private static final String GITAPIURL = "https://api.github.com/";
     private TextView mInfoTextView;
     private ProgressBar progressBar;
     private EditText editText;
@@ -48,14 +48,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     RestAPI restAPI;
     RestAPIUser restAPIUser;
-    List<RetrofitModel> modelList = new ArrayList<>();
     DisposableSingleObserver<Bundle> dso;
     private Realm realm;
+
+    List<RetrofitModel> modelList = new ArrayList<>();
+    AppComponent appComponent;
+    @Inject
+    Call<List<RetrofitModel>> call;
+    @Inject
+    NetworkInfo networkInfo;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        AppComponent appComponent = OrmApp.getComponent();
+        appComponent.injectsToMainActivity(this);
 
         editText = findViewById(R.id.editText);
         mInfoTextView = findViewById(R.id.tvLoad);
@@ -198,32 +207,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btnLoad:
                 mInfoTextView.setText("");
-                Retrofit retrofit = null;
-                Call<List<RetrofitModel>> call;
 
-                try {
-                    retrofit = new Retrofit.Builder()
-                            .baseUrl(GITAPIURL)
-                            .addConverterFactory(GsonConverterFactory.create())
-                            .build();
-                    if (!editText.getText().toString().isEmpty()) {
-                        restAPIUser = retrofit.create(RestAPIUser.class);
-                    } else {
-                        restAPI = retrofit.create(RestAPI.class);
-                    }
-                } catch (Exception e) {
-                    mInfoTextView.setText("no retrofit: " + e.getMessage());
-                    return;
-                }
-
-                if (!editText.getText().toString().isEmpty()) {
-                    call = restAPIUser.loadUsers(editText.getText().toString());
-                } else {
-                    call = restAPI.loadUsers();
-                }
-
-                ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-                NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+                /*ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo(); */
 
                 if (networkInfo != null && networkInfo.isConnected()) {
                     try {
