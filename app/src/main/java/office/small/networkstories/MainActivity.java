@@ -1,6 +1,7 @@
 package office.small.networkstories;
 
 import android.content.Context;
+import android.graphics.ColorSpace;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.support.v7.app.AppCompatActivity;
@@ -17,11 +18,13 @@ import java.util.List;
 import office.small.networkstories.api.RestAPI;
 import office.small.networkstories.api.RestAPIUser;
 import office.small.networkstories.model.RetrofitModel;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
+
 
 public class MainActivity extends AppCompatActivity {
     public static final String DONEURL = "DWNONEURL";
@@ -31,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
     private EditText editText;
     RestAPI restAPI;
     RestAPIUser restAPIUser;
+    //List<Model> modelList new ArrayList<>();
+    //DisposableSingleObserver<Bundle> dso;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
