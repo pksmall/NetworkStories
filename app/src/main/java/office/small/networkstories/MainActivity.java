@@ -15,6 +15,7 @@ import android.widget.Toast;
 import java.io.IOException;
 import java.util.List;
 import office.small.networkstories.api.RestAPI;
+import office.small.networkstories.api.RestAPIUser;
 import office.small.networkstories.model.RetrofitModel;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -24,10 +25,12 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
     public static final String DONEURL = "DWNONEURL";
+    private static final String GITAPIURL = "https://api.github.com/users/";
     private TextView mInfoTextView;
     private ProgressBar progressBar;
     private EditText editText;
     RestAPI restAPI;
+    RestAPIUser restAPIUser;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,19 +47,28 @@ public class MainActivity extends AppCompatActivity {
     private void onClick() {
         mInfoTextView.setText("");
         Retrofit retrofit = null;
+        Call<List<RetrofitModel>> call;
 
         try {
             retrofit = new Retrofit.Builder()
-                    .baseUrl("https://api.github.com/users/")
+                    .baseUrl(GITAPIURL)
                     .addConverterFactory(GsonConverterFactory.create())
                     .build();
-            restAPI = retrofit.create(RestAPI.class);
+            if (!editText.getText().toString().isEmpty()) {
+                restAPIUser = retrofit.create(RestAPIUser.class);
+            } else {
+                restAPI = retrofit.create(RestAPI.class);
+            }
         } catch (Exception e) {
             mInfoTextView.setText("no retrofit: " + e.getMessage());
             return;
         }
 
-        Call<List<RetrofitModel>> call = restAPI.loadUsers();
+        if (!editText.getText().toString().isEmpty()) {
+            call = restAPIUser.loadUsers(editText.getText().toString());
+        } else {
+            call = restAPI.loadUsers();
+        }
 
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
