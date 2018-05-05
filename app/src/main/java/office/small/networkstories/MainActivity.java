@@ -207,10 +207,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btnLoad:
                 mInfoTextView.setText("");
-
-                /*ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-                NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo(); */
-
+                
                 if (networkInfo != null && networkInfo.isConnected()) {
                     try {
                         progressBar.setVisibility(View.VISIBLE);
