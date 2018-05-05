@@ -3,7 +3,6 @@ package office.small.networkstories;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
-import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -13,16 +12,11 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
+import java.io.IOException;
+
+import okhttp3.Call;
+import okhttp3.Callback;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
@@ -63,76 +57,48 @@ public class MainActivity extends AppCompatActivity {
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
 
         if (networkInfo != null && networkInfo.isConnected()) {
-            new DownloadPageTask().execute(request);
+            try {
+                downloadOneUrl(request);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         } else {
             Toast.makeText(this, "Network is off. Turn it on.", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private class DownloadPageTask extends AsyncTask<Request, Void, String> {
-        private static final String DONEURL = "DOWNONEURL";
-        Response response;
+    private void downloadOneUrl(Request sUrl) throws IOException {
+        progressBar.setVisibility(View.VISIBLE);
 
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-            mInfoTextView.setText("");
-            progressBar.setVisibility(View.VISIBLE);
-        }
+        client.newCall(sUrl).enqueue(new Callback() {
+            public static final String DONEURL = "DWNONEURL";
 
-        @Override
-        protected void onPostExecute(String s) {
-            progressBar.setVisibility(View.GONE);
-            mInfoTextView.setText(s);
-            super.onPostExecute(s);
-        }
-
-        @Override
-        protected String doInBackground(Request... urls) {
-            try {
-                return downloadOneUrl(urls[0]);
-            } catch (IOException e) {
+            @Override
+            public void onFailure(Call call, IOException e) {
                 e.printStackTrace();
-                return "error";
             }
-        }
 
-        private String downloadOneUrl(Request sUrl) throws IOException {
-            String data = "";
-
-
-            try {
-
-                final Thread thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            response = client.newCall(sUrl).execute();
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                });
-
-                thread.start();
-                thread.join();
-
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     throw new IOException("Unexpected code" + response);
                 } else {
                     Headers responseHeaders = response.headers();
                     Log.d(DONEURL, "HEADERS");
-                    for(int i = 0; i < responseHeaders.size(); i++) {
+                    for (int i = 0; i < responseHeaders.size(); i++) {
                         Log.d(DONEURL, "Key: " + responseHeaders.name(i) + " Values: " + responseHeaders.value(i));
                     }
-                    data = response.body().string();
+                    final String responseData = response.body().string();
+                    MainActivity.this.runOnUiThread(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            mInfoTextView.setText(responseData);
+                            progressBar.setVisibility(View.GONE);
+                        }
+                    });
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
-            return  data;
-        }
+        });
     }
 }
