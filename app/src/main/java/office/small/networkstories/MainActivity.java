@@ -12,24 +12,22 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.io.IOException;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.Headers;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import java.util.List;
+import office.small.networkstories.api.RestAPI;
+import office.small.networkstories.model.RetrofitModel;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity {
-
+    public static final String DONEURL = "DWNONEURL";
     private TextView mInfoTextView;
     private ProgressBar progressBar;
     private EditText editText;
-    OkHttpClient client;
-    HttpUrl.Builder urlBuilder;
+    RestAPI restAPI;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,64 +38,69 @@ public class MainActivity extends AppCompatActivity {
         mInfoTextView = findViewById(R.id.tvLoad);
         progressBar = findViewById(R.id.progressBar);
         Button btnLoad = findViewById(R.id.btnLoad);
-        client = new OkHttpClient();
         btnLoad.setOnClickListener((v) -> onClick());
     }
 
     private void onClick() {
-        urlBuilder = HttpUrl.parse("https://api.github.com/users").newBuilder();
-        if (!editText.getText().toString().isEmpty()) {
-            urlBuilder.addEncodedPathSegment(editText.getText().toString()); // one user
+        mInfoTextView.setText("");
+        Retrofit retrofit = null;
+
+        try {
+            retrofit = new Retrofit.Builder()
+                    .baseUrl("https://api.github.com/users/")
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build();
+            restAPI = retrofit.create(RestAPI.class);
+        } catch (Exception e) {
+            mInfoTextView.setText("no retrofit: " + e.getMessage());
+            return;
         }
 
-        String url = urlBuilder.build().toString();
-        Request request = new Request.Builder().url(url).build();
+        Call<List<RetrofitModel>> call = restAPI.loadUsers();
 
         ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
 
         if (networkInfo != null && networkInfo.isConnected()) {
             try {
-                downloadOneUrl(request);
+                progressBar.setVisibility(View.VISIBLE);
+                downloadOneUrl(call);
             } catch (IOException e) {
                 e.printStackTrace();
+                mInfoTextView.setText(e.getMessage());
             }
         } else {
             Toast.makeText(this, "Network is off. Turn it on.", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void downloadOneUrl(Request sUrl) throws IOException {
-        progressBar.setVisibility(View.VISIBLE);
-
-        client.newCall(sUrl).enqueue(new Callback() {
-            public static final String DONEURL = "DWNONEURL";
-
+    private void downloadOneUrl(Call<List<RetrofitModel>> call) throws IOException {
+        call.enqueue(new Callback<List<RetrofitModel>>() {
             @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+            public void onResponse(Call<List<RetrofitModel>> call, Response<List<RetrofitModel>> response) {
+                if (response.isSuccessful()) {
+                    if (response != null) {
+                        RetrofitModel curRetrofitModel = null;
+                        for (int i=0; i < response.body().size(); i++) {
+                            curRetrofitModel = response.body().get(i);
+                            mInfoTextView.append("\nLogin = " + curRetrofitModel.getLogin() +
+                                "\nId = " + curRetrofitModel.getId() +
+                                "\nURI = " + curRetrofitModel.getAvatarUrl() +
+                                "\n------------");
+                        }
+                    }
+                } else {
+                    Log.d(DONEURL, "onResponse errro: " + response.code());
+                    mInfoTextView.setText("onResponse error: " + response.code());
+                }
+                progressBar.setVisibility(View.GONE);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    throw new IOException("Unexpected code" + response);
-                } else {
-                    Headers responseHeaders = response.headers();
-                    Log.d(DONEURL, "HEADERS");
-                    for (int i = 0; i < responseHeaders.size(); i++) {
-                        Log.d(DONEURL, "Key: " + responseHeaders.name(i) + " Values: " + responseHeaders.value(i));
-                    }
-                    final String responseData = response.body().string();
-                    MainActivity.this.runOnUiThread(new Runnable() {
-
-                        @Override
-                        public void run() {
-                            mInfoTextView.setText(responseData);
-                            progressBar.setVisibility(View.GONE);
-                        }
-                    });
-                }
+            public void onFailure(Call<List<RetrofitModel>> call, Throwable t) {
+                Log.d(DONEURL, "onFailure: " + t);
+                mInfoTextView.setText("onFailure: " + t.getMessage());
+                progressBar.setVisibility(View.GONE);
             }
         });
     }
